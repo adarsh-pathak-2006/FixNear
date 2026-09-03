@@ -1,7 +1,7 @@
 from django.dispatch import receiver
 from django.db.models.signals import post_save
 from django.contrib.auth import get_user_model
-from .models import CustomerProfile, TechnicianProfile
+from authentication.models import CustomerProfile, TechnicianProfile
 from fixnear.cache_key import customer_profile_key, technician_profile_key, technicianlist_key
 from django.core.cache import cache
 

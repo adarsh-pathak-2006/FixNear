@@ -23,7 +23,7 @@ class TechnicianProfile(models.Model):
     experience=models.PositiveIntegerField(null=True)
     average_rating=models.IntegerField(null=True)
     total_job=models.PositiveIntegerField(default=0)
-    skill=models.CharField(max_length=100, choices=[('MOBILE_REPAIR', 'Mobile_Repair'), ('LAPTOP_REPAIR', 'Laptop_Repair'), ('PLUMBER', 'Plumber'), ('ELECTRICIAN', 'Electrician')])
+    skill=models.CharField(max_length=100, choices=[('MOBILE_REPAIR', 'Mobile_Repair'), ('LAPTOP_REPAIR', 'Laptop_Repair'), ('PLUMBER', 'Plumber'), ('ELECTRICIAN', 'Electrician')], null=True)
     is_avaliable=models.BooleanField(default=True)
 
     def __str__(self):
