@@ -2,7 +2,7 @@ from django.dispatch import receiver
 from django.db.models.signals import post_save
 from django.contrib.auth import get_user_model
 from authentication.models import CustomerProfile, TechnicianProfile
-from fixnear.cache_key import customer_profile_key, technician_profile_key, technicianlist_key
+from fixnear.cache_key import customer_profile_key, technician_profile_key, technicianlist_key, repairrequest_list_key
 from django.core.cache import cache
 from customer.models import RepairRequest
 from technician.models import SentRequest
@@ -32,3 +32,9 @@ def SendRequestToTheAppropiateTechnicians(sender, instance, created, **kwargs):
         profiles=TechnicianProfile.objects.select_related('user').filter(skill=instance.skills_required)
         for profile in profiles:
             SentRequest.objects.create(technician=profile, request=instance)
+
+@receiver(post_save, sender=SentRequest)
+def CacheInvalidationWhenNewRequestCreatsOrGetsApproved(sender, instance, created, **kwargs):
+    for i in range(1, 100):
+        cache.delete(repairrequest_list_key(page_no=i, userid=instance.technician.user.id))
+        
