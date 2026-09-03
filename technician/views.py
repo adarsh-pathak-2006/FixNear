@@ -6,8 +6,12 @@ from rest_framework.response import Response
 from fixnear.pagination import GeneralPagnination
 from fixnear.cache_key import repairrequest_list_key
 from django.core.cache import cache
+from fixnear.throttling import GeneralThrottle
+from fixnear.permissions import IsTechnician
 
 class AllRequestListAPI(APIView):
+    permission_classes=[IsTechnician]
+    throttle_classes=[GeneralThrottle]
     def get(self, request):
         pageno=request.query_params.get("page", "1")
         key=repairrequest_list_key(page_no=pageno, userid=request.user.id)
@@ -22,6 +26,8 @@ class AllRequestListAPI(APIView):
         return response
 
 class RepairRequestAcceptAPI(APIView):
+    permission_classes=[IsTechnician]
+    throttle_classes=[GeneralThrottle]
     def patch(self, request, pk):
         instance=get_object_or_404(SentRequest.objects.select_related('technician__user', 'request'), is_accepted=False, id=pk)
         serial=SentRequestSerializer(instance, data=request.data, partial=True)
@@ -37,6 +43,8 @@ class RepairRequestAcceptAPI(APIView):
         return Response(status=204)
 
 class RepairStatusUpdateAPI(APIView):
+    permission_classes=[IsTechnician]
+    throttle_classes=[GeneralThrottle]
     def patch(self, request, pk):
         instance=get_object_or_404(Repair.objects.select_related('accepted_request'), accepted_request__is_accepted=True, id=pk)
         serial=RepairSerializer(instance, data=request.data, partial=True)
