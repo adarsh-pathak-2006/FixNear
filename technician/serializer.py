@@ -12,6 +12,8 @@ class SentRequestSerializer(ModelSerializer):
         read_only_fields=['created_on']
 
 class RepairSerializer(ModelSerializer):
+    accepted_request=SentRequestSerializer(read_only=True)
     class Meta:
         model=Repair
-        fields=['status']
+        fields='__all__'
+        read_only_fields=['updated_on']
