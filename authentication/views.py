@@ -1,17 +1,29 @@
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .models import CustomerProfile, TechnicianProfile, TechnicalSkill
-from .serializers import RegisterSerializer, CustomerSerializer, TechnicianProfileSerializer, TechnicalSkillSerializer
+from .models import CustomerProfile, TechnicianProfile
+from .serializers import RegisterSerializer, CustomerSerializer, TechnicianProfileSerializer
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from fixnear.cache_key import customer_profile_key, technician_profile_key, technicianlist_key
 from django.core.cache import cache
 from fixnear.pagination import GeneralPagnination
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from fixnear.throttling import TokenObtainThrottle, TokenRefreshThrottle, RegistrationThrottle, GeneralThrottle
+from fixnear.permissions import IsCustomer, IsTechnician, IsTechnicianAndCustomer
+from rest_framework.permissions import AllowAny
 
 User=get_user_model()
 
+class CustomTokenObtainView(TokenObtainPairView):
+    throttle_classes=[TokenObtainThrottle]
+
+class CustomTokenRefreshView(TokenRefreshView):
+    throttle_classes=[TokenRefreshThrottle]
+
 class RegisterAPI(APIView):
+    permission_classes=[AllowAny]
+    throttle_classes=[RegistrationThrottle]    
     def post(self, request):
         serial=RegisterSerializer(data=request.data)
         if serial.is_valid():
@@ -28,6 +40,8 @@ class RegisterAPI(APIView):
         return Response(serial.errors, status=400)
 
 class MyCustomerProfile(APIView):
+    permission_classes=[IsCustomer]
+    throttle_classes=[GeneralThrottle]
     def get(self, request):
         key=customer_profile_key(request.user.id)
         cached_data=cache.get(key=key)
@@ -48,6 +62,8 @@ class MyCustomerProfile(APIView):
 
 
 class MyTechnicianProfile(APIView):
+    permission_classes=[IsTechnician]
+    throttle_classes=[GeneralThrottle]
     def get(self, request):
         key=technician_profile_key(request.user.id)
         cached_data=cache.get(key=key)
@@ -68,6 +84,8 @@ class MyTechnicianProfile(APIView):
 
 
 class TechnicalProfileListAPI(APIView):
+    permission_classes=[IsTechnicianAndCustomer]
+    throttle_classes=[GeneralThrottle]
     def get(self, request):
         page_no=request.query_params.get("page", "1")
         key=technicianlist_key(page_no)
