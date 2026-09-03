@@ -1,5 +1,5 @@
 from rest_framework.serializers import ModelSerializer
-from .models import SentRequest
+from .models import SentRequest, Repair
 from authentication.serializers import TechnicianProfileSerializer
 from customer.serializer import RepairRequestSerializer
 
@@ -10,3 +10,8 @@ class SentRequestSerializer(ModelSerializer):
         model=SentRequest
         fields='__all__'
         read_only_fields=['created_on']
+
+class RepairSerializer(ModelSerializer):
+    class Meta:
+        model=Repair
+        fields=['status']
