@@ -5,9 +5,9 @@ from .models import CustomerProfile, TechnicianProfile, TechnicalSkill
 from .serializers import RegisterSerializer, CustomerSerializer, TechnicianProfileSerializer, TechnicalSkillSerializer
 from django.contrib.auth import get_user_model
 from django.db.models import Q
-from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
-from fixnear.cache_key import customer_profile_key, technician_profile_key
+from fixnear.cache_key import customer_profile_key, technician_profile_key, technicianlist_key
 from django.core.cache import cache
+from fixnear.pagination import GeneralPagnination
 
 User=get_user_model()
 
@@ -67,15 +67,16 @@ class MyTechnicianProfile(APIView):
         return Response(serial.errors, status=400)
 
 
-class TechnicalSkillAPI(ListCreateAPIView):
-    serializer_class=TechnicalSkillSerializer
-    def get_queryset(self):
-        return TechnicalSkill.objects.select_related('user__user').filter(user__user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user__user=self.request.user)
-
-class TechnicalSkillDetailAPI(RetrieveUpdateDestroyAPIView):
-    serializer_class=TechnicalSkillSerializer
-    def get_queryset(self):
-        return TechnicalSkill.objects.select_related('user__user').filter(user__user=self.request.user)   
+class TechnicalProfileListAPI(APIView):
+    def get(self, request):
+        page_no=request.query_params.get("page", "1")
+        key=technicianlist_key(page_no)
+        cached_data=cache.get(key)
+        if cached_data:
+            return Response(cached_data, status=200)
+        paginator=GeneralPagnination()
+        data=paginator.paginate_queryset(TechnicianProfile.objects.select_related('user').filter(is_avaliable=True), request, view=self)
+        serial=TechnicianProfileSerializer(data, many=True)
+        response=paginator.get_paginated_response(serial.data)
+        cache.set(key, response.data, timeout=300)
+        return response

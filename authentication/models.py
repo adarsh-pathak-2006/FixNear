@@ -23,16 +23,17 @@ class TechnicianProfile(models.Model):
     experience=models.PositiveIntegerField(null=True)
     average_rating=models.IntegerField(null=True)
     total_job=models.PositiveIntegerField(default=0)
+    skill=models.CharField(max_length=100, choices=[('MOBILE_REPAIR', 'Mobile_Repair'), ('LAPTOP_REPAIR', 'Laptop_Repair'), ('PLUMBER', 'Plumber'), ('ELECTRICIAN', 'Electrician')])
     is_avaliable=models.BooleanField(default=True)
 
     def __str__(self):
         return self.user.username
 
-class TechnicalSkill(models.Model):
-    user=models.ForeignKey(TechnicianProfile, on_delete=models.CASCADE)
-    skill_name=models.CharField(max_length=50)
-    experience_level=models.PositiveIntegerField(max_length=5)
-    description=models.TextField(null=True)
+# class TechnicalSkill(models.Model):
+#     user=models.ForeignKey(TechnicianProfile, on_delete=models.CASCADE)
+#     skill_name=models.CharField(max_length=50)
+#     experience_level=models.PositiveIntegerField(max_length=5)
+#     description=models.TextField(null=True)
 
-    def __str__(self):
-        return self.skill_name
+#     def __str__(self):
+#         return self.skill_name

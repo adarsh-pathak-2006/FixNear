@@ -1,6 +1,6 @@
 from rest_framework.serializers import ModelSerializer
 from django.contrib.auth import get_user_model
-from .models import CustomerProfile, TechnicianProfile, TechnicalSkill
+from .models import CustomerProfile, TechnicianProfile
 
 User=get_user_model()
 
@@ -28,9 +28,3 @@ class TechnicianProfileSerializer(ModelSerializer):
         model=TechnicianProfile
         fields='__all__'
         read_only_fields=['created_on']
-
-class TechnicalSkillSerializer(ModelSerializer):
-    user=TechnicianProfileSerializer(read_only=True)
-    class Meta:
-        model=TechnicalSkill
-        fields='__all__'
