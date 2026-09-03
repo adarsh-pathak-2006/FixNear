@@ -1,9 +1,9 @@
 from rest_framework.serializers import ModelSerializer
 from .models import RepairRequest
-from authentication.models import CustomerProfile
+from authentication.serializers import CustomerSerializer
 
 class RepairRequestSerializer(ModelSerializer):
-    user=CustomerProfile(read_only=True)
+    user=CustomerSerializer(read_only=True)
     class Meta:
         model=RepairRequest
         fields='__all__'
