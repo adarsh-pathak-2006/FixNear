@@ -10,3 +10,12 @@ class SentRequest(models.Model):
 
     def __str__(self):
         return f"request:- {self.request.requirement} sent to {self.technician.user.username}"
+
+
+class Repair(models.Model):
+    accepted_request=models.OneToOneField(SentRequest, on_delete=models.CASCADE)
+    status=models.CharField(max_length=10, choices=[('PENDING', 'Pending'), ('PROCESSING', 'Processing'), ('COMPLETED', 'Completed')], default='PENDING')
+    updated_on=models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.accepted_request.id} with status: {self.status}"
