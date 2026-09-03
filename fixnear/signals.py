@@ -14,7 +14,8 @@ def ProfileCreateCustomerOrTechnician(sender, instance, created, **kwargs):
     if created:
         if instance.role=='CUSTOMER':
             CustomerProfile.objects.create(user=instance)
-        TechnicianProfile.objects.create(user=instance)
+        else:
+            TechnicianProfile.objects.create(user=instance)
 
 @receiver(post_save, sender=CustomerProfile)
 def CustomerProfileCacheInvalidation(sender, instance, created, **kwargs):
