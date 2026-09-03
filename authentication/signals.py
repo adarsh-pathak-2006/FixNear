@@ -19,5 +19,5 @@ def CustomerProfileCacheInvalidation(sender, instance, created, **kwargs):
     cache.delete(customer_profile_key(instance.user.id))
 
 @receiver(post_save, sender=TechnicianProfile)
-def CustomerProfileCacheInvalidation(sender, instance, created, **kwargs):
+def TechnicianProfileCacheInvalidation(sender, instance, created, **kwargs):
     cache.delete(technician_profile_key(instance.user.id))
