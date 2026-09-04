@@ -8,7 +8,9 @@
 [![Django](https://img.shields.io/badge/Django-5.2-092E20?style=for-the-badge&logo=django&logoColor=white)](https://djangoproject.com)
 [![DRF](https://img.shields.io/badge/Django_REST_Framework-3.x-red?style=for-the-badge)](https://django-rest-framework.org)
 [![JWT](https://img.shields.io/badge/Auth-JWT-black?style=for-the-badge&logo=jsonwebtokens)](https://jwt.io)
-[![SQLite](https://img.shields.io/badge/Database-SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org)
+[![Celery](https://img.shields.io/badge/Task_Queue-Celery-37814A?style=for-the-badge&logo=celery&logoColor=white)](https://docs.celeryq.dev)
+[![Redis](https://img.shields.io/badge/Broker%2FCache-Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io)
+[![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://postgresql.org)
 
 </div>
 
@@ -16,7 +18,7 @@
 
 ## 📖 What is FixNear?
 
-FixNear is a **Django REST API** backend for a two-sided service marketplace. A **customer** posts a repair request (e.g. *"my laptop won't turn on"*), and the platform **automatically finds and notifies every available technician** with the matching skill — in real time via Django signals. The technician can then accept or decline the job, and update the repair status as the work progresses.
+FixNear is a **Django REST API** backend for a two-sided service marketplace. A **customer** posts a repair request (e.g. *"my laptop won't turn on"*), and the platform **automatically finds and notifies every available technician** with the matching skill — asynchronously via a **Celery task queue**. The technician can then accept or decline the job, and update the repair status as the work progresses.
 
 > Think of it as an Uber-style matching system, but for repair professionals.
 
@@ -27,49 +29,59 @@ FixNear is a **Django REST API** backend for a two-sided service marketplace. A 
 | Feature | Details |
 |---|---|
 | 🔐 **Role-based auth** | Separate `CUSTOMER` and `TECHNICIAN` roles with JWT access + refresh tokens |
-| ⚡ **Auto-matching** | Django signals instantly dispatch a `SentRequest` to every available technician with the right skill when a job is posted |
+| ⚡ **Async auto-matching** | On job creation a Celery task is enqueued (via `transaction.on_commit`) and dispatches `SentRequest` rows to every available, skill-matched technician — without blocking the HTTP response |
 | 🛡️ **Ownership enforcement** | Technicians can only accept, reject, or update *their own* requests |
 | 📄 **Pagination** | All list endpoints paginate (10 per page, configurable) |
 | 🚦 **Throttling** | Per-role, per-endpoint rate limits prevent abuse |
-| 🗄️ **Caching** | Profile and list views are cached; signals invalidate stale keys automatically |
+| 🗄️ **Caching** | Profile and list views are Redis-cached; signals invalidate stale keys automatically |
 | 👤 **Auto-profiles** | A `CustomerProfile` or `TechnicianProfile` is auto-created on registration via signals |
+| 🔁 **Idempotent tasks** | `get_or_create` on each `SentRequest` means safe Celery retries — no duplicate records ever |
 
 ---
 
 ## 🗺️ System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         FixNear API                             │
-│                                                                 │
-│   ┌──────────────┐    POST /customer/repair-request/            │
-│   │   Customer   │ ──────────────────────────────────────────►  │
-│   └──────────────┘                                              │
-│                              ▼                                  │
-│                    RepairRequest created                        │
-│                              │                                  │
-│                    post_save signal fires                       │
-│                              │                                  │
-│                              ▼                                  │
-│              Filter: TechnicianProfile WHERE                    │
-│              skill = skills_required AND is_available = True    │
-│                              │                                  │
-│              ┌───────────────┼───────────────┐                 │
-│              ▼               ▼               ▼                 │
-│         SentRequest     SentRequest     SentRequest            │
-│         (Tech A)        (Tech B)        (Tech C)               │
-│              │               │               │                 │
-│   ┌──────────┘               └───────────────┘                 │
-│   │                                                             │
-│   │   GET /technician/all-request/                             │
-│   ▼                                                             │
-│   ┌───────────────┐                                             │
-│   │  Technician   │  PATCH /technician/request/<id>/           │
-│   └───────────────┘  (accept = True → Repair row created)      │
-│                                                                 │
-│              PATCH /technician/status/<id>/                     │
-│              PENDING → PROCESSING → COMPLETED                   │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                          FixNear API                                │
+│                                                                     │
+│   ┌──────────────┐    POST /customer/repair-request/                │
+│   │   Customer   │ ──────────────────────────────────────────────►  │
+│   └──────────────┘                                                  │
+│                              ▼                                      │
+│                    RepairRequest saved in DB                        │
+│                    201 response returned immediately ◄──────────┐   │
+│                              │                                  │   │
+│                    post_save signal fires                        │   │
+│                    transaction.on_commit() enqueues task ────────┘   │
+│                              │                                      │
+│                              ▼  (async — off the request thread)    │
+│                    ┌──────────────────┐                             │
+│                    │  Celery Worker   │                             │
+│                    │                 │                             │
+│                    │  dispatch_       │                             │
+│                    │  repair_request  │                             │
+│                    └────────┬─────────┘                             │
+│                             │                                       │
+│              Filter: TechnicianProfile WHERE                        │
+│              skill = skills_required AND is_available = True        │
+│                             │                                       │
+│              ┌──────────────┼──────────────┐                        │
+│              ▼              ▼              ▼                        │
+│         SentRequest    SentRequest    SentRequest                   │
+│         (Tech A)       (Tech B)       (Tech C)                      │
+│              │              │              │                        │
+│   ┌──────────┘              └──────────────┘                        │
+│   │                                                                 │
+│   │   GET /technician/all-request/                                  │
+│   ▼                                                                 │
+│   ┌───────────────┐                                                 │
+│   │  Technician   │  PATCH /technician/request/<id>/               │
+│   └───────────────┘  (accept = True → Repair row created)          │
+│                                                                     │
+│              PATCH /technician/status/<id>/                         │
+│              PENDING → PROCESSING → COMPLETED                       │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -82,12 +94,15 @@ fixnear/
 │   ├── settings.py           ← Configuration (reads from .env)
 │   ├── urls.py               ← Root URL router
 │   ├── apps.py               ← Connects signals on startup
-│   ├── signals.py            ← Auto-profile creation & matching logic
+│   ├── celery.py             ← Celery app instance
+│   ├── tasks.py              ← dispatch_repair_request Celery task
+│   ├── signals.py            ← Auto-profile creation; enqueues Celery task
 │   ├── permissions.py        ← IsCustomer / IsTechnician / both
 │   ├── throttling.py         ← Per-endpoint rate limits
 │   ├── pagination.py         ← Shared 10-per-page paginator
 │   ├── cache_key.py          ← Centralised cache key helpers
-│   └── constants.py          ← Shared SKILL_CHOICES
+│   ├── constants.py          ← Shared SKILL_CHOICES
+│   └── tests.py              ← 12 tests covering task + signal + profiles
 │
 ├── authentication/           ← Users & profiles
 │   ├── models.py             ← User, CustomerProfile, TechnicianProfile
@@ -109,6 +124,7 @@ fixnear/
 │
 ├── .env                      ← Secret config (never committed)
 ├── .env.example              ← Template for contributors
+├── build.sh                  ← Render deploy script
 ├── requirements.txt
 └── manage.py
 ```
@@ -154,16 +170,25 @@ Customer POSTs /customer/repair-request/
         │
         ▼
   RepairRequest saved in DB
+        │  ◄── 201 response returned to customer immediately
+        ▼
+  post_save signal fires
+  transaction.on_commit() schedules Celery task
+  (task only enqueued after DB transaction commits)
         │
-        ▼  (post_save signal)
+        ▼  ── async, off the HTTP thread ──────────────────────────
+  Celery Worker picks up dispatch_repair_request(repair_request_id)
+        │
+        ▼
   Find all TechnicianProfiles WHERE
   skill = skills_required AND is_available = True
         │
-        ▼  (bulk_create)
+        ▼  (get_or_create per technician — idempotent on retry)
   SentRequest created for each matching technician
         │
-        ▼  (post_save signal)
+        ▼  (post_save signal on SentRequest)
   Cache invalidated for each technician's request list
+  ─────────────────────────────────────────────────────────────────
         │
         ▼
   Technician GETs /technician/all-request/
@@ -263,6 +288,23 @@ python manage.py runserver
 
 API is now live at **`http://127.0.0.1:8000/`**
 
+### 7 — Run the Celery worker (optional locally)
+
+In development, `DEBUG=True` sets `CELERY_TASK_ALWAYS_EAGER=True`, which means **tasks run synchronously inside the Django process** — no worker needed.
+
+To test with a real worker (requires Redis running locally):
+
+```bash
+# Set REDIS_URL in .env first, then:
+celery -A fixnear worker --loglevel=info
+```
+
+### 8 — Run the test suite
+
+```bash
+python manage.py test fixnear.tests --verbosity=2
+```
+
 ---
 
 ## 📬 Example Requests
@@ -342,14 +384,25 @@ REDIS_URL       =  <auto-filled by Render Redis add-on>
 
 > ⚠️ Render injects `DATABASE_URL` and `REDIS_URL` automatically when you link the add-ons — you do **not** need to copy them manually.
 
-### 4 — Local vs Production behaviour
+### 4 — Add a Celery Worker service on Render
 
-| Setting | Local (no env vars) | Production (env vars set) |
+Create a second **Background Worker** service in Render pointing to the same repo:
+
+| Field | Value |
+|---|---|
+| **Start Command** | `celery -A fixnear worker --loglevel=info` |
+| **Environment** | Same env vars as the Web Service |
+
+> The worker connects to the same Redis instance as the web process and consumes the `dispatch_repair_request` tasks.
+
+### 5 — Local vs Production behaviour
+
+| Setting | Local (`DEBUG=True`) | Production (`DEBUG=False`) |
 |---|---|---|
 | Database | SQLite | PostgreSQL |
 | Cache | LocMemCache (per-process) | Redis (shared across all workers) |
+| Celery tasks | Run **synchronously** in-process (`ALWAYS_EAGER`) | Run **asynchronously** via Redis broker + Celery worker |
 | Static files | Django dev server | WhiteNoise (compressed + cached) |
-| Debug | `True` | `False` |
 
 ---
 
@@ -360,10 +413,10 @@ All settings are loaded from `.env` via `python-decouple`.
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `SECRET_KEY` | ✅ | — | Django secret key |
-| `DEBUG` | ❌ | `False` | Enable debug mode |
+| `DEBUG` | ❌ | `False` | Enable debug mode; also controls `CELERY_TASK_ALWAYS_EAGER` |
 | `ALLOWED_HOSTS` | ❌ | `127.0.0.1,localhost` | Comma-separated allowed hosts |
 | `DATABASE_URL` | ❌ | SQLite fallback | Full Postgres connection URL |
-| `REDIS_URL` | ❌ | LocMemCache fallback | Redis connection URL |
+| `REDIS_URL` | ❌ | LocMemCache / local Redis fallback | Used for **both** the Redis cache and the **Celery broker** |
 
 ### Rate Limits
 

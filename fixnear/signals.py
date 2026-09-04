@@ -1,6 +1,7 @@
 from django.dispatch import receiver
 from django.db.models.signals import post_save
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from authentication.models import CustomerProfile, TechnicianProfile
 from fixnear.cache_key import (
     customer_profile_key,
@@ -39,14 +40,8 @@ def TechnicianProfileCacheInvalidation(sender, instance, created, **kwargs):
 @receiver(post_save, sender=RepairRequest)
 def SendRequestToTheAppropriateTechnicians(sender, instance, created, **kwargs):
     if created:
-        profiles = (
-            TechnicianProfile.objects
-            .select_related('user')
-            .filter(skill=instance.skills_required, is_available=True)
-        )
-        SentRequest.objects.bulk_create(
-            [SentRequest(technician=profile, request=instance) for profile in profiles]
-        )
+        from fixnear.tasks import dispatch_repair_request
+        transaction.on_commit(lambda: dispatch_repair_request.delay(instance.pk))
 
 
 @receiver(post_save, sender=SentRequest)
