@@ -312,15 +312,58 @@ curl -X PATCH http://127.0.0.1:8000/technician/request/3/ \
 
 ---
 
+## 🚀 Deploy to Render
+
+### 1 — Services to create on Render
+
+| Service | Type | Notes |
+|---|---|---|
+| Web Service | Python / Gunicorn | The Django API |
+| PostgreSQL | Render Postgres | Auto-provides `DATABASE_URL` |
+| Redis | Render Redis | Provides `REDIS_URL` |
+
+### 2 — Web Service settings
+
+| Field | Value |
+|---|---|
+| **Build Command** | `./build.sh` |
+| **Start Command** | `gunicorn fixnear.wsgi:application` |
+| **Environment** | Python 3 |
+
+### 3 — Environment variables to set on Render
+
+```
+SECRET_KEY      =  <generate a strong random key>
+DEBUG           =  False
+ALLOWED_HOSTS   =  your-app.onrender.com
+DATABASE_URL    =  <auto-filled by Render Postgres add-on>
+REDIS_URL       =  <auto-filled by Render Redis add-on>
+```
+
+> ⚠️ Render injects `DATABASE_URL` and `REDIS_URL` automatically when you link the add-ons — you do **not** need to copy them manually.
+
+### 4 — Local vs Production behaviour
+
+| Setting | Local (no env vars) | Production (env vars set) |
+|---|---|---|
+| Database | SQLite | PostgreSQL |
+| Cache | LocMemCache (per-process) | Redis (shared across all workers) |
+| Static files | Django dev server | WhiteNoise (compressed + cached) |
+| Debug | `True` | `False` |
+
+---
+
 ## ⚙️ Configuration Reference
 
 All settings are loaded from `.env` via `python-decouple`.
 
-| Variable | Default | Description |
-|---|---|---|
-| `SECRET_KEY` | — | Django secret key (**required**) |
-| `DEBUG` | `False` | Enable debug mode |
-| `ALLOWED_HOSTS` | `127.0.0.1,localhost` | Comma-separated list of allowed hosts |
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SECRET_KEY` | ✅ | — | Django secret key |
+| `DEBUG` | ❌ | `False` | Enable debug mode |
+| `ALLOWED_HOSTS` | ❌ | `127.0.0.1,localhost` | Comma-separated allowed hosts |
+| `DATABASE_URL` | ❌ | SQLite fallback | Full Postgres connection URL |
+| `REDIS_URL` | ❌ | LocMemCache fallback | Redis connection URL |
 
 ### Rate Limits
 
