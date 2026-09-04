@@ -2,40 +2,57 @@ from django.dispatch import receiver
 from django.db.models.signals import post_save
 from django.contrib.auth import get_user_model
 from authentication.models import CustomerProfile, TechnicianProfile
-from fixnear.cache_key import customer_profile_key, technician_profile_key, technicianlist_key, repairrequest_list_key
+from fixnear.cache_key import (
+    customer_profile_key,
+    technician_profile_key,
+    technicianlist_key,
+    repairrequest_list_key,
+)
 from django.core.cache import cache
 from customer.models import RepairRequest
 from technician.models import SentRequest
 
-User=get_user_model()
+User = get_user_model()
+
 
 @receiver(post_save, sender=User)
 def ProfileCreateCustomerOrTechnician(sender, instance, created, **kwargs):
     if created:
-        if instance.role=='CUSTOMER':
+        if instance.role == 'CUSTOMER':
             CustomerProfile.objects.create(user=instance)
-        else:
+        elif instance.role == 'TECHNICIAN':
             TechnicianProfile.objects.create(user=instance)
+
 
 @receiver(post_save, sender=CustomerProfile)
 def CustomerProfileCacheInvalidation(sender, instance, created, **kwargs):
     cache.delete(customer_profile_key(instance.user.id))
 
+
 @receiver(post_save, sender=TechnicianProfile)
 def TechnicianProfileCacheInvalidation(sender, instance, created, **kwargs):
     cache.delete(technician_profile_key(instance.user.id))
-    for i in range(1, 100):
-        cache.delete(technicianlist_key(i))
+    keys = [technicianlist_key(i) for i in range(1, 101)]
+    cache.delete_many(keys)
+
 
 @receiver(post_save, sender=RepairRequest)
-def SendRequestToTheAppropiateTechnicians(sender, instance, created, **kwargs):
+def SendRequestToTheAppropriateTechnicians(sender, instance, created, **kwargs):
     if created:
-        profiles=TechnicianProfile.objects.select_related('user').filter(skill=instance.skills_required)
-        for profile in profiles:
-            SentRequest.objects.create(technician=profile, request=instance)
+        profiles = (
+            TechnicianProfile.objects
+            .select_related('user')
+            .filter(skill=instance.skills_required, is_available=True)
+        )
+        SentRequest.objects.bulk_create(
+            [SentRequest(technician=profile, request=instance) for profile in profiles]
+        )
+
 
 @receiver(post_save, sender=SentRequest)
-def CacheInvalidationWhenNewRequestCreatsOrGetsApproved(sender, instance, created, **kwargs):
-    for i in range(1, 100):
-        cache.delete(repairrequest_list_key(page_no=i, userid=instance.technician.user.id))
-
+def CacheInvalidationWhenNewRequestCreatedOrApproved(sender, instance, created, **kwargs):
+    keys = [
+        repairrequest_list_key(page_no=i, userid=instance.technician.user.id)
+        for i in range(1, 101)
+    ]
+    cache.delete_many(keys)

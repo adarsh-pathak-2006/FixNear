@@ -1,13 +1,17 @@
-from rest_framework.throttling import UserRateThrottle
+from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
 
-class RegistrationThrottle(UserRateThrottle):
-    rate="20/hour"
 
-class TokenObtainThrottle(UserRateThrottle):
-    rate="30/hour"
+class RegistrationThrottle(AnonRateThrottle):
+    rate = '20/hour'
+
+
+class TokenObtainThrottle(AnonRateThrottle):
+    rate = '30/hour'
+
 
 class TokenRefreshThrottle(UserRateThrottle):
-    rate="7/hour"
+    rate = '7/hour'
+
 
 class GeneralThrottle(UserRateThrottle):
-    rate="30/minute"
+    rate = '30/minute'
