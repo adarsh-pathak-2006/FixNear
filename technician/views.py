@@ -29,7 +29,7 @@ class RepairRequestAcceptAPI(APIView):
     permission_classes=[IsTechnician]
     throttle_classes=[GeneralThrottle]
     def patch(self, request, pk):
-        instance=get_object_or_404(SentRequest.objects.select_related('technician__user', 'request'), is_accepted=False, id=pk)
+        instance=get_object_or_404(SentRequest.objects.select_related('technician__user', 'request'), is_accepted=False, id=pk, technician__user=request.user)
         serial=SentRequestSerializer(instance, data=request.data, partial=True)
         if serial.is_valid():
             serial.save()
@@ -38,7 +38,7 @@ class RepairRequestAcceptAPI(APIView):
         return Response(serial.errors, status=400)
 
     def delete(self, request, pk):
-        instance=get_object_or_404(SentRequest.objects.select_related('technician__user', 'request'), is_accepted=False, id=pk)
+        instance=get_object_or_404(SentRequest.objects.select_related('technician__user', 'request'), is_accepted=False, id=pk, technician__user=request.user)
         instance.delete()
         return Response(status=204)
 
