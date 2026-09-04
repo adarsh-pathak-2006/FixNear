@@ -475,6 +475,41 @@ Repair ────────────────────────�
 
 ---
 
+## 📈 Scalability & Capacity
+
+### Capacity by Deployment Tier
+
+| Tier | Infrastructure | Concurrent Users | Daily Active Users | Repair Requests / min |
+|---|---|---|---|---|
+| **Dev / Free** | 1 instance · SQLite · no Redis | ~20 | ~500 | ~5 |
+| **Starter** | 1 web + 1 Celery worker · Postgres · Redis | ~200 | ~5,000 | ~30 |
+| **Production** | 3 web + 3 Celery workers · Postgres · Redis | ~600 | ~30,000 | ~90 |
+| **Scaled** | 10 web + 10 workers · read replica · PgBouncer | ~3,000 | ~150,000 | ~300 |
+| **+PostGIS radius filter** | Any of the above + geospatial pre-filter | ~20,000 | ~500,000+ | unlimited\* |
+
+> \*Fan-out cost drops from O(all technicians with skill) to O(technicians within radius).
+
+### The Fan-Out Ceiling
+
+The current dispatch task calls `get_or_create` once per matching technician in a loop. This is the primary scaling bottleneck:
+
+| Matching technicians | DB writes | Task duration | Max safe repair requests / min |
+|---|---|---|---|
+| 100 | 100 | ~0.1 s | ~600 |
+| 1,000 | 1,000 | ~1 s | ~60 |
+| 10,000 | 10,000 | ~10 s | ~6 |
+| 100,000 | 100,000 | ~100 s | < 1 |
+
+### What Would Push It to National Scale
+
+1. **PostGIS radius filter** — dispatch only to technicians within e.g. 10 km. Single biggest unlock.
+2. **Chunked Celery fan-out** — process 500 technicians per sub-task in parallel via `chord`.
+3. **PgBouncer** — cap open Postgres connections regardless of how many workers run.
+4. **Read replica** — route all `SELECT` traffic (profile reads, list views) to a replica.
+5. **Cache key versioning** — replace the 100-key deletion loop with an incremented version counter.
+
+---
+
 ## 🤝 Contributing
 
 1. Fork the repository
