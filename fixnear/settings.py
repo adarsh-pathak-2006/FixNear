@@ -70,8 +70,8 @@ TEMPLATES = [
     },
 ]
 
-# WSGI_APPLICATION = 'fixnear.wsgi.application'
-ASGI_APPLICATION = 'fixnear.asgi.application'
+WSGI_APPLICATION = 'fixnear.wsgi.application'
+
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
