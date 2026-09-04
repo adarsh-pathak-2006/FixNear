@@ -38,4 +38,4 @@ def SendRequestToTheAppropiateTechnicians(sender, instance, created, **kwargs):
 def CacheInvalidationWhenNewRequestCreatsOrGetsApproved(sender, instance, created, **kwargs):
     for i in range(1, 100):
         cache.delete(repairrequest_list_key(page_no=i, userid=instance.technician.user.id))
-        
+
